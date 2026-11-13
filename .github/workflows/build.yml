@@ -1,0 +1,46 @@
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows-msvc:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, Win32]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build -A ${{ matrix.arch }}
+      - name: Build (Release)
+        run: cmake --build build --config Release --parallel
+      - name: Build lib (Debug)
+        run: cmake --build build --config Debug --parallel --target tgs-parse-imgui
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Install
+        shell: cmd
+        run: |
+          cmake --install build --config Release --prefix dist
+          copy /y build\Debug\tgs-parse-imgui-d.lib dist\lib\
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tgs-parse-imgui-msvc-${{ matrix.arch }}
+          path: dist
+
+  linux-gcc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Ninja
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build --parallel
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
